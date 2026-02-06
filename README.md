@@ -78,6 +78,26 @@ ollama pull mistral
 ollama serve
 ```
 
+### Connect Local Ollama to Streamlit Cloud (Optional)
+
+To use your local Ollama from the cloud app:
+
+1. **Start ngrok tunnel:**
+```bash
+.\scripts\start_ngrok.bat
+```
+
+2. **Copy the ngrok URL** from the terminal output
+
+3. **Add to Streamlit Cloud secrets:**
+```toml
+OLLAMA_BASE_URL = "https://your-ngrok-url.ngrok-free.dev"
+```
+
+See [NGROK_SETUP.md](NGROK_SETUP.md) for detailed instructions.
+
+**Note:** Your computer must stay on with ngrok running for this to work.
+
 ## 📝 Usage
 
 1. **Upload a contract** (PDF, DOCX, or TXT)
