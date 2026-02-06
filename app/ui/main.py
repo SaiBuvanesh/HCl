@@ -59,7 +59,7 @@ with st.sidebar:
     
     # Update provider based on selection
     if "Cloud" in selected_provider:
-        if llm_service.gemini_available:
+        if getattr(llm_service, 'gemini_available', False):
             llm_service.switch_provider("gemini")
             st.success(f"**Active:** {llm_service.active_model}")
             st.caption("Powered by Google Gemini")
@@ -68,7 +68,8 @@ with st.sidebar:
             st.caption("Add GOOGLE_API_KEY to .env file")
         
     elif "Local" in selected_provider:
-        if llm_service.available_models:
+        available_models = getattr(llm_service, 'available_models', [])
+        if available_models:
             llm_service.switch_provider("ollama")
             
             # Ollama mode with model selection
