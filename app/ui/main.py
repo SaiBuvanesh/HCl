@@ -65,7 +65,7 @@ with st.sidebar:
             st.caption("Powered by Google Gemini")
         else:
             st.error("**Cloud LLM Not Configured**")
-            st.caption("Add GOOGLE_API_KEY to .env file")
+            st.caption("Add GOOGLE_API_KEY to Streamlit secrets (cloud) or .env file (local)")
         
     elif "Local" in selected_provider:
         available_models = getattr(llm_service, 'available_models', [])

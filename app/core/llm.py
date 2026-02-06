@@ -18,7 +18,22 @@ class LLMService:
         # 1. Check for Google Gemini
         self.gemini_available = False
         self.gemini_model_name = None
-        api_key = os.getenv("GOOGLE_API_KEY")
+        
+        # Try to get API key from Streamlit secrets first (for cloud), then .env (for local)
+        api_key = None
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and 'GOOGLE_API_KEY' in st.secrets:
+                api_key = st.secrets["GOOGLE_API_KEY"]
+                print("LLM Service: Using API key from Streamlit secrets")
+        except:
+            pass
+        
+        if not api_key:
+            api_key = os.getenv("GOOGLE_API_KEY")
+            if api_key:
+                print("LLM Service: Using API key from .env file")
+        
         if api_key:
             try:
                 genai.configure(api_key=api_key)
@@ -54,9 +69,22 @@ class LLMService:
         
         # 2. Check Local/Remote Ollama Availability
         # Support for remote Ollama via ngrok or other tunnels
-        ollama_base_url = os.getenv("OLLAMA_BASE_URL")
+        # Try Streamlit secrets first (for cloud), then .env (for local)
+        ollama_base_url = None
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and 'OLLAMA_BASE_URL' in st.secrets:
+                ollama_base_url = st.secrets["OLLAMA_BASE_URL"]
+                print(f"LLM Service: Using remote Ollama from Streamlit secrets: {ollama_base_url}")
+        except:
+            pass
+        
+        if not ollama_base_url:
+            ollama_base_url = os.getenv("OLLAMA_BASE_URL")
+            if ollama_base_url:
+                print(f"LLM Service: Using remote Ollama from .env: {ollama_base_url}")
+        
         if ollama_base_url:
-            print(f"LLM Service: Using remote Ollama at {ollama_base_url}")
             self.ollama_client = ollama.Client(host=ollama_base_url)
         else:
             self.ollama_client = ollama
