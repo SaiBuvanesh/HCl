@@ -1,5 +1,6 @@
 import os
 import ollama
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,9 +11,47 @@ class LLMService:
         self.reasoning_model = "deepseek-r1" # Default thinking model
         self.active_model = None
         self.is_offline = False
+        self.provider = "ollama" # 'ollama' or 'gemini'
+        self.gemini_model = None
         self.available_models = []
+
+        # 1. Check for Google Gemini
+        self.gemini_available = False
+        self.gemini_model_name = None
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if api_key:
+            try:
+                genai.configure(api_key=api_key)
+                
+                # Dynamic Model Selection
+                chosen_model = None
+                try:
+                    for m in genai.list_models():
+                        if 'generateContent' in m.supported_generation_methods:
+                            # Prefer flash or pro
+                            if 'flash' in m.name:
+                                chosen_model = m.name
+                                break
+                            elif 'pro' in m.name and not chosen_model:
+                                chosen_model = m.name
+                    
+                    if not chosen_model:
+                         # Fallback to first available if no preference met
+                         for m in genai.list_models():
+                            if 'generateContent' in m.supported_generation_methods:
+                                chosen_model = m.name
+                                break
+                except:
+                    chosen_model = 'gemini-1.5-flash' # Hard fallback
+
+                print(f"LLM Service: Gemini Available - {chosen_model}")
+                self.gemini_model = genai.GenerativeModel(chosen_model)
+                self.gemini_model_name = chosen_model
+                self.gemini_available = True
+            except Exception as e:
+                print(f"Gemini Connection Error: {e}")
         
-        # Check Local Availability
+        # 2. Check Local Availability (Always check, don't skip)
         try:
             models_response = ollama.list()
             
@@ -42,45 +81,88 @@ class LLMService:
                 # 2. Standard
                 self.local_model = next((m for m in self.available_models if 'mistral' in m or 'llama3' in m or 'llama' in m), self.available_models[0])
                 
-                self.active_model = self.local_model # Default to standard
-                self.is_offline = False
+                print(f"LLM Service: Ollama Available - {len(self.available_models)} models")
             else:
-                self.is_offline = True
+                print("LLM Service: No Ollama models found.")
         except Exception as e:
             print(f"Ollama Error: {e}")
+        
+        # 3. Set default provider based on what's available
+        if self.gemini_available:
+            self.provider = "gemini"
+            self.active_model = self.gemini_model_name
+            self.is_offline = False
+            print(f"LLM Service: Using Gemini by default ({self.active_model})")
+        elif self.available_models:
+            self.provider = "ollama"
+            self.active_model = self.local_model
+            self.is_offline = False
+            print(f"LLM Service: Using Ollama by default ({self.active_model})")
+        else:
             self.is_offline = True
+            print("LLM Service: No LLM available.")
 
+    def switch_provider(self, provider="gemini"):
+        """Switch between gemini and ollama providers"""
+        if provider == "gemini" and self.gemini_available:
+            self.provider = "gemini"
+            self.active_model = self.gemini_model_name
+            self.is_offline = False
+        elif provider == "ollama" and hasattr(self, 'available_models') and self.available_models:
+            self.provider = "ollama"
+            self.active_model = self.local_model
+            self.is_offline = False
+        else:
+            print(f"Cannot switch to {provider} - not available")
+    
     def set_mode(self, mode="standard"):
-        """Switches between Standard and Reasoning models"""
+        """Switches between Standard and Reasoning models (Ollama only)"""
+        if self.provider == "gemini":
+            return # Gemini handles everything for now
+            
         if mode == "reasoning":
             self.active_model = self.reasoning_model
         else:
             self.active_model = self.local_model
 
+    def _call_llm(self, prompt):
+        """Unified method to call the active LLM provider."""
+        if self.is_offline:
+            raise Exception("AI is offline.")
+
+        if self.provider == "gemini":
+            try:
+                response = self.gemini_model.generate_content(prompt)
+                return response.text
+            except Exception as e:
+                return f"Gemini Error: {str(e)}"
+        else:
+            # Ollama
+            try:
+                response = ollama.chat(model=self.active_model, messages=[
+                    {'role': 'user', 'content': prompt},
+                ])
+                return response['message']['content']
+            except Exception as e:
+                return f"Ollama Error: {str(e)}"
 
     def explain_clause(self, text, context="business"):
         """
         Explains a legal clause.
         """
         if self.is_offline:
-            return "AI Offline: Enable Ollama for explanations."
+            return "AI Offline: Enable Cloud API or local Ollama."
 
         prompt = f"Explain this legal clause in simple {context} terms for a non-lawyer. If the text is in Hindi, translate and explain in English. Max 2 sentences. Clause: {text}"
         
-        try:
-            response = ollama.chat(model=self.active_model, messages=[
-                {'role': 'user', 'content': prompt},
-            ])
-            return response['message']['content']
-        except:
-            return "Error: Local LLM failed."
+        return self._call_llm(prompt)
 
     def analyze_risk_depth(self, clause_text, risk_type):
         """
         Deep dive into risk with actionable advice.
         """
         if self.is_offline:
-            return "AI Offline: Enable Ollama for risk analysis."
+            return "AI Offline: Enable Cloud API or local Ollama."
 
         prompt = (
             f"You are a legal expert for Indian SMEs. Analyze this '{risk_type}' clause.\n"
@@ -93,23 +175,18 @@ class LLMService:
             "Keep it concise and business-focused."
         )
         
-        try:
-            response = ollama.chat(model=self.active_model, messages=[
-                {'role': 'user', 'content': prompt},
-            ])
-            return response['message']['content']
-        except:
-            return "Error: Local LLM failed."
+        return self._call_llm(prompt)
             
     def generate_document_summary(self, full_text):
         """
         Generates a comprehensive yet simple summary of the entire document.
         """
         if self.is_offline:
-            return "AI Summary Unavailable (Ollama not running)."
+            return "AI Summary Unavailable."
             
-        # Truncate to avoid context limit issues (approx 3000 tokens)
-        MAX_CHARS = 12000 
+        # Truncate to avoid context limit issues 
+        # Gemini 1.5 has large context window, but good to be safe. Ollama depends on model.
+        MAX_CHARS = 30000 if self.provider == "gemini" else 12000
         safe_text = full_text[:MAX_CHARS]
         
         prompt = (
@@ -126,17 +203,11 @@ class LLMService:
             "- Do not use legal jargon (e.g., instead of 'indemnification', say 'protection against lawsuits').\n"
             "- Write in a natural, conversational flow."
         )
-        try:
-            response = ollama.chat(model=self.active_model, messages=[
-                {'role': 'user', 'content': prompt},
-            ])
-            return response['message']['content']
-        except:
-            return "Error generating detailed summary."
+        return self._call_llm(prompt)
 
     def generate_summary(self, high_risks):
         if self.is_offline:
-            return "AI Summary Unavailable (Ollama not running)."
+            return "AI Summary Unavailable."
             
         prompt = (
             f"Generate a strategic executive summary for a business owner based on these identified risks: {high_risks}\n"
@@ -145,24 +216,18 @@ class LLMService:
             "- **Key Risks**: 3 bullet points highlighting critical issues.\n"
             "- **Negotiation Strategy**: 1 piece of advice for the next meeting."
         )
-        try:
-            response = ollama.chat(model=self.active_model, messages=[
-                {'role': 'user', 'content': prompt},
-            ])
-            return response['message']['content']
-        except:
-            return "Error generating summary."
+        return self._call_llm(prompt)
 
     def chat_with_document(self, query, document_text):
         """
         Interactive Q&A with the document context.
         """
         if self.is_offline:
-            return "AI Offline: Enable Ollama to chat with the document."
+            return "AI Offline: Enable Cloud API or local Ollama."
 
-        # Truncate context if too long (naive approach, can be improved)
-        context_limit = 4000 
-        safe_context = document_text[:context_limit]
+        # Truncate context
+        MAX_CHARS = 30000 if self.provider == "gemini" else 4000
+        safe_context = document_text[:MAX_CHARS]
         
         prompt = (
             f"Context: {safe_context}\n\n"
@@ -173,13 +238,7 @@ class LLMService:
             "If the information is not in the contract, say so. Cite specific clauses if possible."
         )
         
-        try:
-            response = ollama.chat(model=self.active_model, messages=[
-                {'role': 'user', 'content': prompt},
-            ])
-            return response['message']['content']
-        except Exception as e:
-            return f"Error: {str(e)}"
+        return self._call_llm(prompt)
 
 # Singleton instance
 llm_service = LLMService()

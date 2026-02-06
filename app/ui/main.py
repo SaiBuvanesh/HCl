@@ -38,19 +38,57 @@ with st.sidebar:
     
     enable_ai = st.toggle("Enable AI Insights", value=True)
     
-    # Model Selection
-    model_type = st.radio(
-        "Analysis Engine",
-        ["Standard (Speed)", "DeepSeek R1 (Deep Reasoning)"],
-        captions=["Mistral/Llama", "Chain-of-Thought Logic"],
-        index=0
+    # Import LLM service to check provider
+    from app.core.llm import llm_service
+    
+    # Display Active LLM Provider
+    st.markdown("#### Analysis Engine")
+    
+    # Always show both options
+    provider_options = ["☁️ Cloud LLM (Gemini)", "🖥️ Local LLM (Ollama)"]
+    
+    # Default selection based on current provider
+    default_idx = 0 if llm_service.provider == "gemini" else 1
+    
+    selected_provider = st.radio(
+        "Select Provider",
+        provider_options,
+        index=default_idx,
+        label_visibility="collapsed"
     )
     
-    from app.core.llm import llm_service
-    if "DeepSeek" in model_type:
-        llm_service.set_mode("reasoning")
-    else:
-        llm_service.set_mode("standard")
+    # Update provider based on selection
+    if "Cloud" in selected_provider:
+        if llm_service.gemini_available:
+            llm_service.switch_provider("gemini")
+            st.success(f"**Active:** {llm_service.active_model}")
+            st.caption("Powered by Google Gemini")
+        else:
+            st.error("**Cloud LLM Not Configured**")
+            st.caption("Add GOOGLE_API_KEY to .env file")
+        
+    elif "Local" in selected_provider:
+        if llm_service.available_models:
+            llm_service.switch_provider("ollama")
+            
+            # Ollama mode with model selection
+            model_type = st.radio(
+                "Local Model",
+                ["Standard (Speed)", "DeepSeek R1 (Reasoning)"],
+                captions=["Mistral/Llama", "Chain-of-Thought"],
+                index=0,
+                label_visibility="collapsed"
+            )
+            
+            if "DeepSeek" in model_type:
+                llm_service.set_mode("reasoning")
+            else:
+                llm_service.set_mode("standard")
+            
+            st.info(f"**Active:** {llm_service.active_model}")
+        else:
+            st.error("**Ollama Not Running**")
+            st.caption("Start Ollama to use local models")
     
     st.markdown("---")
     st.caption(f"System v1.0 • Secure Environment")
