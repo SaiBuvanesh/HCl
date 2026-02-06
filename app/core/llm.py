@@ -99,6 +99,8 @@ class LLMService:
             self.is_offline = False
             print(f"LLM Service: Using Ollama by default ({self.active_model})")
         else:
+            self.provider = None
+            self.active_model = "No LLM Available"
             self.is_offline = True
             print("LLM Service: No LLM available.")
 

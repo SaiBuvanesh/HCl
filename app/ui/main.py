@@ -48,7 +48,7 @@ with st.sidebar:
     provider_options = ["☁️ Cloud LLM (Gemini)", "🖥️ Local LLM (Ollama)"]
     
     # Default selection based on current provider
-    default_idx = 0 if llm_service.provider == "gemini" else 1
+    default_idx = 0 if getattr(llm_service, 'provider', 'gemini') == "gemini" else 1
     
     selected_provider = st.radio(
         "Select Provider",
