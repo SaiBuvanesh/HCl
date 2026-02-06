@@ -1,4 +1,11 @@
 import streamlit as st
+import sys
+import os
+
+# Add the project root to sys.path so we can import 'app'
+# This is required because the script is inside app/ui/
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
 from pathlib import Path
 from app.core.config import APP_NAME
 
