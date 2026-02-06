@@ -1,0 +1,14 @@
+streamlit
+nltk
+sentence-transformers
+ollama
+pdfplumber
+python-docx
+pandas
+numpy
+plotly
+python-dotenv
+google-generativeai
+pymupdf
+rapidocr-onnxruntime
+onnxruntime
