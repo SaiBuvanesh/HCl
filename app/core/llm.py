@@ -51,9 +51,18 @@ class LLMService:
             except Exception as e:
                 print(f"Gemini Connection Error: {e}")
         
-        # 2. Check Local Availability (Always check, don't skip)
+        
+        # 2. Check Local/Remote Ollama Availability
+        # Support for remote Ollama via ngrok or other tunnels
+        ollama_base_url = os.getenv("OLLAMA_BASE_URL")
+        if ollama_base_url:
+            print(f"LLM Service: Using remote Ollama at {ollama_base_url}")
+            self.ollama_client = ollama.Client(host=ollama_base_url)
+        else:
+            self.ollama_client = ollama
+        
         try:
-            models_response = ollama.list()
+            models_response = self.ollama_client.list()
             
             # Handle response structure (dict vs object)
             if hasattr(models_response, 'models'):
@@ -141,7 +150,7 @@ class LLMService:
         else:
             # Ollama
             try:
-                response = ollama.chat(model=self.active_model, messages=[
+                response = self.ollama_client.chat(model=self.active_model, messages=[
                     {'role': 'user', 'content': prompt},
                 ])
                 return response['message']['content']
